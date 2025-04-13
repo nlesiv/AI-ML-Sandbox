@@ -8,6 +8,10 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, f1_score
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
+import lightgbm as lgb
+import xgboost as xgb
 
 pd.set_option('display.max_columns', 50)
 data_dir = r'data/'
@@ -183,3 +187,60 @@ knn_classifier.fit(X_train_scaled, y_train_narrowed.values.ravel())
 y_pred_knn = knn_classifier.predict(X_test_scaled.values)
 print(classification_report(y_test, y_pred_knn))
 print("F1 score is: ", f1_score(y_test, y_pred_knn, pos_label='Churned'))
+
+# Tree Classifier
+dt_classifier = DecisionTreeClassifier(max_depth=6)
+# train with scaled features and labels
+dt_classifier.fit(X_train, y_train)
+# Predict on test model
+y_pred_dt = dt_classifier.predict(X_test)
+print(classification_report(y_test, y_pred_dt))
+print("F1 score is: ", f1_score(y_test, y_pred_dt, pos_label='Churned'))
+
+
+
+# Random Forest Classifier
+rf_classifier = RandomForestClassifier(max_depth=10)
+# train with scaled features and labels
+rf_classifier.fit(X_train, y_train)
+# Predict on test model
+y_pred_rf = rf_classifier.predict(X_test)
+print(classification_report(y_test, y_pred_rf))
+print("F1 score is: ", f1_score(y_test, y_pred_rf, pos_label='Churned'))
+
+# Light GBM Classifier
+lgb_classifier = lgb.LGBMClassifier(max_depth=4)
+
+# Set categorical features for LightGBM
+categorical_features = [col for col in X_train.columns if col not in ['Age','Number of Dependents','Number of Referrals',
+                                                                      'Avg Monthly Long Distance Charges',
+                                                                      'Avg Monthly GB Download','Monthly Charge',
+                                                                      'Total Charges','Total Refunds','Total Extra Data Charges',
+                                                                      'Total Long Distance Charges','Total Revenue',
+                                                                      'Population','Revenue per Tenure Months']]
+# train with scaled features and labels
+lgb_classifier.fit(X_train, y_train, categorical_feature=categorical_features)
+# Predict on test model
+y_pred_lgb = lgb_classifier.predict(X_test)
+print(classification_report(y_test, y_pred_lgb))
+print("F1 score is: ", f1_score(y_test, y_pred_lgb, pos_label='Churned'))
+
+
+# XGBoost Classifier
+
+# Set categorical features for XGBoost
+# Change categorical features' types
+X_train[categorical_features] = X_train[categorical_features].astype('category')
+X_test[categorical_features] = X_test[categorical_features].astype('category')
+
+y_train_encoded = y_train.copy()
+y_test_encoded = y_test.copy()
+
+y_train_encoded['Customer Status'] = np.where(y_train['Customer Status'] == 'Churned',1,0)
+y_test_encoded['Customer Status'] = np.where(y_test['Customer Status'] == 'Churned',1,0)
+xgb_classifier = xgb.XGBClassifier(max_depth=3, enable_categorical=True)
+
+# train with scaled features and labels
+xgb_classifier.fit(X_train, y_train_encoded)
+y_pred_xgb = xgb_classifier.predict(X_test)
+print("F1 score is: ", f1_score(y_test_encoded, y_pred_xgb))
