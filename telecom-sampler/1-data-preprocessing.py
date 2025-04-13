@@ -3,6 +3,12 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, f1_score
+from sklearn.neighbors import KNeighborsClassifier
+
 pd.set_option('display.max_columns', 50)
 data_dir = r'data/'
 df = pd.read_csv(data_dir + 'telecom_customer_churn.csv')
@@ -96,8 +102,14 @@ df['is Stockton'] = np.where(df['City'] == 'Stockton', 1, 0);
 
 df = df.drop(columns=['City']);
 
+pd.set_option('display.max_columns', 70)
+print(df.shape)
 
-print(df.head());
+print(df['Customer Status'].value_counts());
+# print(df.head());
+
+df_joined = df[df['Customer Status'] == 'Joined'];
+df_churned_stayed = df[df['Customer Status'] != 'Joined'];
 
 
 # df = pd.get_dummies(df, columns=one_hot_columns, drop_first=True);
@@ -106,3 +118,68 @@ print(df.head());
 # plt.title('Avg Monthly Long Distance Charges');
 # plt.show();
 # print(df.head())
+
+# --------- Train Test Split ------------
+feature_columns = [col for col in df_churned_stayed.columns if col not in ['Customer Status', 'Churn Category', 'Churn Reason', 'Customer ID']];
+target_column = ['Customer Status']
+
+# Predictor variables
+X = df_churned_stayed[feature_columns]
+
+# Target variable
+y = df_churned_stayed[target_column]
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.30, random_state=42)
+# Define a list of continuous and categorical features so that they can be scaled.
+continous_and_ordinal_columns = ['Age','Number of Dependents','Number of Referrals',
+                                 'Avg Monthly Long Distance Charges','Internet Type',
+                                 'Avg Monthly GB Download','Contract','Monthly Charge',
+                                 'Total Charges','Total Refunds', 'Total Extra Data Charges',
+                                 'Total Long Distance Charges', 'Total Revenue','Population']
+
+# for col in continous_and_ordinal_columns:
+#     print(col)
+#     sns.boxplot(X_train.reset_index()[col])
+#     plt.show()
+
+# --- Eliminate outliers ------
+# Number of referrals < 11
+# Number of dependents < 4
+# Total Extra Data charges < 20
+referral_mask = (X_train['Number of Referrals'] < 11)
+dependents_mask = (X_train['Number of Dependents'] < 4)
+extra_data_mask = (X_train['Total Extra Data Charges'] < 20)
+
+# filter out the data
+X_train_outliers_eliminated = X_train[referral_mask & dependents_mask & extra_data_mask]
+
+scaler = MinMaxScaler()
+scaler.fit(X_train_outliers_eliminated)
+X_train_scaled = X_train_outliers_eliminated.copy()
+X_train_scaled[X_train_scaled.columns] = scaler.transform(X_train_outliers_eliminated[X_train_outliers_eliminated.columns])
+X_test_scaled = X_test.copy()
+X_test_scaled[X_test_scaled.columns] = scaler.transform(X_test[X_test.columns])
+
+y_train_narrowed = y_train.loc[X_train_scaled.index]
+print(y_train.value_counts());
+lr_classifier = LogisticRegression(max_iter=1000, random_state=42)
+# train with scaled featurea and labels
+# print(y_train_narrowed);
+print(y_train_narrowed.shape);
+lr_classifier.fit(X_train_scaled, y_train_narrowed.values.ravel())
+
+# Predict on test model 
+y_pred_lr = lr_classifier.predict(X_test_scaled)
+print(classification_report(y_test, y_pred_lr))
+print("F1 score is: ", f1_score(y_test, y_pred_lr, pos_label='Churned'))
+
+
+#KNN Classifier
+knn_classifier = KNeighborsClassifier(n_neighbors=5)
+# train with scaled features and labels
+knn_classifier.fit(X_train_scaled, y_train_narrowed.values.ravel())
+
+# Predict on test model
+y_pred_knn = knn_classifier.predict(X_test_scaled.values)
+print(classification_report(y_test, y_pred_knn))
+print("F1 score is: ", f1_score(y_test, y_pred_knn, pos_label='Churned'))
