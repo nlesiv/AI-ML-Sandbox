@@ -18,6 +18,16 @@ data_dir = r'data/'
 df = pd.read_csv(data_dir + 'telecom_customer_churn.csv')
 zipcode_population = pd.read_csv(data_dir + 'telecom_zipcode_population.csv')
 
+def plot_feature_importances(importances, feature_names):
+    indices = np.argsort(importances)
+    
+    plt.figure(figsize = (16,12))
+    plt.title('Feature Importances')
+    plt.barh(range(len(indices)), importances[indices], color='b', align='center')
+    plt.yticks(range(len(indices)), [feature_names[i] for i in indices])
+    plt.xlabel('Relative Importance')
+    plt.show()
+
 
 # print(df);
 # print(df.head());
@@ -244,3 +254,49 @@ xgb_classifier = xgb.XGBClassifier(max_depth=3, enable_categorical=True)
 xgb_classifier.fit(X_train, y_train_encoded)
 y_pred_xgb = xgb_classifier.predict(X_test)
 print("F1 score is: ", f1_score(y_test_encoded, y_pred_xgb))
+
+#PLot lgbm feature importances
+lgb_importances = lgb_classifier.feature_importances_
+features_names = X_train.columns
+# plot_feature_importances(lgb_importances, features_names)
+
+df_importances_first_35 = pd.DataFrame(lgb_importances, index=features_names).reset_index().sort_values(by=0, ascending=False).head(35);
+
+feature_columns_top_importance = list(df_importances_first_35['index']);
+
+X_train_top_columns = X_train[feature_columns_top_importance]
+X_test_top_columns = X_test[feature_columns_top_importance]
+
+categorical_features_narrowed = [col for col in categorical_features if col in X_train_top_columns.columns]
+
+lgb_classifier.fit(X_train_top_columns, y_train, categorical_feature=categorical_features_narrowed)
+y_pred_lgb_top = lgb_classifier.predict(X_test_top_columns)
+print("F1 score is: ", f1_score(y_test, y_pred_lgb_top, pos_label='Churned'))
+
+# Change categorical features' types
+# df_joined_updated = df_joined[categorical_features].astype('category')
+# df_joined[categorical_features] = df_joined[categorical_features].astype('category')
+
+# joined_customers_preds = lgb_classifier.predict(df_joined[feature_columns_top_importance])
+
+# df_joined['predictions'] = joined_customers_preds
+
+# df_joined.head(10)
+
+
+
+
+# -- MUltiple Classifier ------
+target_column_multiclass = ['Churn Category']
+X_multiclass = df_churned_stayed[feature_columns]
+y_multiclass = df_churned_stayed[target_column_multiclass]
+# fill the NA category with a filler 'Stayed'
+y_multiclass = y_multiclass.fillna('Stayed')
+X_train_multiclass, X_test_multiclass, y_train_multiclass, y_test_multiclass = train_test_split(X_multiclass, y_multiclass, test_size=0.30, random_state=42)
+# Define a list of continuous and categorical features so that they can be scaled.
+lgbm_classifier_multiclass = lgb.LGBMClassifier(max_depth=4, objective='multiclass', num_class=4)
+lgbm_classifier_multiclass.fit(X_train_multiclass, y_train_multiclass, categorical_feature=categorical_features)
+
+y_pred_lgbm_multiclass = lgbm_classifier_multiclass.predict(X_test_multiclass)
+print(classification_report(y_test_multiclass, y_pred_lgbm_multiclass))
+print(y_pred_lgbm_multiclass)
